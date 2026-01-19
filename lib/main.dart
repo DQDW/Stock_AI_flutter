@@ -1,8 +1,23 @@
 import 'package:flutter/material.dart';
+import 'dart:io'; // HttpOverrides 사용을 위해 추가
 import './predict_list_screen.dart';
+import './login_screen.dart';
+import './widgets/main_drawer.dart';
 
 void main() {
+  // 개발용: 자가 서명 인증서(Self-Signed Certificate) 허용
+  HttpOverrides.global = MyHttpOverrides();
   runApp(const MyApp());
+}
+
+// SSL 인증서 에러 무시 클래스 (배포 시 제거하거나 수정 필요)
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -24,6 +39,12 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white, // 배경색 흰색
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      endDrawer: const MainDrawer(),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center, // 세로 기준 중앙 정렬
@@ -101,6 +122,22 @@ class HomeScreen extends StatelessWidget {
                   child: const Text('예측 목록 조회'),
                 ),
               ],
+            ),
+            const SizedBox(height: 20),
+            // 로그인 화면 이동 버튼 (테스트용)
+            TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LoginScreen(),
+                  ),
+                );
+              },
+              child: const Text(
+                '로그인 화면으로 이동 (Test)',
+                style: TextStyle(color: Colors.grey),
+              ),
             ),
           ],
         ),
