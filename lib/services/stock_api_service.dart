@@ -1,9 +1,16 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/stock_prediction.dart';
+import 'auth_service.dart';
 
 class StockApiService {
-  static const String _baseUrl = 'http://10.46.9.8:8080/api/stocks';
+  final AuthService _authService = AuthService();
+
+  static String get _baseUrl {
+    if (kIsWeb) return 'http://localhost:8080/api/stocks';
+    return 'http://10.46.9.8:8080/api/stocks';
+  }
 
   Future<List<StockPrediction>> fetchStocks({
     String? search,
@@ -15,12 +22,10 @@ class StockApiService {
     String? useYN,
   }) async {
     var url = Uri.parse(_baseUrl);
-
+    
+    // ... (중략: queryParams 설정 로직은 동일)
     Map<String, String> queryParams = {};
-
-    // 1. Search (Generic) -> Ticker or Name
     if (search != null && search.isNotEmpty) {
-      // Heuristic: If English/Numbers only -> Ticker, Otherwise (e.g. Korean) -> Name
       final isTicker = RegExp(r'^[a-zA-Z0-9]+$').hasMatch(search);
       if (isTicker) {
         queryParams['ticker'] = search;
@@ -28,17 +33,11 @@ class StockApiService {
         queryParams['name'] = search;
       }
     }
-
-    // 2. Specific Filters (Override generic search if provided)
     if (ticker != null && ticker.isNotEmpty) queryParams['ticker'] = ticker;
     if (name != null && name.isNotEmpty) queryParams['name'] = name;
-
-    // 3. Date Filters
     if (date != null) queryParams['date'] = date;
     if (startDate != null) queryParams['startDate'] = startDate;
     if (endDate != null) queryParams['endDate'] = endDate;
-
-    // 4. Usage Filter
     if (useYN != null) queryParams['useYN'] = useYN;
 
     if (queryParams.isNotEmpty) {
@@ -48,7 +47,17 @@ class StockApiService {
     print('Requesting: $url');
 
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      // 1. 토큰 가져오기
+      final token = await _authService.getToken();
+
+      // 2. 헤더에 토큰 추가
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
 
       print('Response Status: ${response.statusCode}');
 

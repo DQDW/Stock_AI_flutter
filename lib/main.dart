@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io'; // HttpOverrides 사용을 위해 추가
+import 'package:provider/provider.dart';
+import './providers/auth_provider.dart';
 import './predict_list_screen.dart';
 import './login_screen.dart';
 import './widgets/main_drawer.dart';
@@ -7,7 +9,14 @@ import './widgets/main_drawer.dart';
 void main() {
   // 개발용: 자가 서명 인증서(Self-Signed Certificate) 허용
   HttpOverrides.global = MyHttpOverrides();
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 // SSL 인증서 에러 무시 클래스 (배포 시 제거하거나 수정 필요)
@@ -20,8 +29,22 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    // 앱 시작 시 로그인 상태 확인
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<AuthProvider>(context, listen: false).checkLoginStatus();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,14 +58,39 @@ class MyApp extends StatelessWidget {
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  void _navigateTo(BuildContext context, Widget screen, {bool requireAuth = false}) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    if (requireAuth && !authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인이 필요한 기능입니다.')),
+      );
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // AuthProvider의 상태를 구독
+    final authProvider = Provider.of<AuthProvider>(context);
+    final isLoggedIn = authProvider.isAuthenticated;
+
     return Scaffold(
       backgroundColor: Colors.white, // 배경색 흰색
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
+        title: Text(isLoggedIn ? '환영합니다!' : ''),
       ),
       endDrawer: const MainDrawer(),
       body: Center(
@@ -76,6 +124,8 @@ class HomeScreen extends StatelessWidget {
                 // 파란색 버튼 (예측 데이터 등록)
                 ElevatedButton(
                   onPressed: () {
+                    // 데이터 등록 기능도 로그인이 필요하다고 가정
+                    _navigateTo(context, const HomeScreen(), requireAuth: true); 
                     print('데이터 등록 버튼 클릭됨');
                   },
                   style: ElevatedButton.styleFrom(
@@ -98,12 +148,7 @@ class HomeScreen extends StatelessWidget {
                 // 흰색 버튼 (예측 목록 조회)
                 OutlinedButton(
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const PredictionListScreen(),
-                      ),
-                    );
+                    _navigateTo(context, const PredictionListScreen(), requireAuth: true);
                     print('목록 조회 버튼 클릭됨');
                   },
                   style: OutlinedButton.styleFrom(
@@ -124,21 +169,37 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            // 로그인 화면 이동 버튼 (테스트용)
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const LoginScreen(),
-                  ),
-                );
-              },
-              child: const Text(
-                '로그인 화면으로 이동 (Test)',
-                style: TextStyle(color: Colors.grey),
+            // 로그인 상태에 따른 버튼 표시
+            if (!isLoggedIn)
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  '로그인 화면으로 이동 (Test)',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              )
+            else
+              TextButton(
+                onPressed: () async {
+                  await authProvider.logout();
+                  if (context.mounted) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('로그아웃 되었습니다.')),
+                    );
+                  }
+                },
+                child: const Text(
+                  '로그아웃',
+                  style: TextStyle(color: Colors.red),
+                ),
               ),
-            ),
           ],
         ),
       ),
